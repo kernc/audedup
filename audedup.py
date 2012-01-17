@@ -35,9 +35,6 @@ class Audedup:
   args = None       # parsed sys.argv arguments
   rawfile = None    # used for storing PCM output from ffmpeg/mplayer
   
-  #~ thresholds = {
-    #~ 'track_length': 30,   # two tracks can be at most this different in length to be considered similar
-  #~ }
   
   # perhaps replace with audiolab in the future?
   ffmpeg_command = (
@@ -95,10 +92,7 @@ class Audedup:
       i += maxidx
       
     maximums = sorted(maximums, reverse=True)[:n_max] # first n_max sorted by magnitude
-    #~ amps, freqs = zip(*maximums)
-    
     return maximums
-    #~ return np.array(sorted(freqs)) if amps[0] != 0 else np.array([])
   
   
   
@@ -135,10 +129,8 @@ class Audedup:
   
   
   
-  """ run mplayer/ffmpeg to PCM-mono-downsample a file 
-  @return filename with raw PCM or None on error
-  """
   def preprocess_file(self, filename):
+    """ run mplayer/ffmpeg to PCM-mono-downsample a file """
     rawfilename = ''
     for command in [self.mplayer_command, 
                     self.ffmpeg_command]:
@@ -153,15 +145,12 @@ class Audedup:
         continue
       
       break   # file is successfully converted
-    
     return rawfilename
 
 
   
-  """ multi-dimensional autocorrelation with FFT 
-  @return autocorrelation coefficients
-  """
   def autocorr(self, x):
+    """ multi-dimensional autocorrelation with FFT """
     X = rfft(x, n=(x.shape[1]*2-1), axis=1)
     xr = irfft(X * X.conjugate(), axis=1).real
     xr = fftshift(xr, axes=1)
@@ -192,7 +181,7 @@ class Audedup:
     feature['filename'] = filename
     feature['track_length'] = pcm.size / self.SRATE
     
-    # among similar, it discerns between (perceived) more vs less loud files
+    # among similar, relative magnitude discerns between (perceived) more vs less loud files
     rel_mag = pcm[pcm > 0].sum() + abs(pcm[pcm < 0]).sum()
     rel_mag /= 2 * pcm.size * abs(pcm).max()
     feature['relative_magnitude'] = rel_mag
@@ -229,31 +218,17 @@ class Audedup:
     tempos = self.local_maxima(acorr, 60, 10, 0, 1)
     (amps, offsets) = zip(*tempos)
     
-    #~ tempo = np.array(sorted(offsets)[:3])
     tempo = np.array(sorted(offsets))
-    #~ feature['tempo'] = (tempo / abs(tempo).max()) ** 2
-    #~ feature['tempo'] = (tempo / n_windows)
     feature['tempo'] = tempo
-    
-    
-    #~ print(feature['tempo'])
-    
     
     self.features.append(feature)
   
   
   
-  def build_similar_clusters(self):
+  def print_similar_clusters(self):
     
-    def dist_to_closest(a, vec): return abs(vec - a).min()
     def idx_of_closest(a, vec): return abs(vec - a).argmin()
     def euclid_dist(a, b): return sqrt(((a-b) ** 2).sum())
-    
-    
-    def taxicab_dist(a, b):
-      if len(a) > len(b): a, b = b, a
-      return abs(np.concatenate((a, [0]*(len(b) - len(a)))) - b).sum()
-    
     
     def cosine_similarity(a, b):
       numerator = np.dot(a, b)
@@ -261,7 +236,6 @@ class Audedup:
       if denominator == 0:
         return 1 if numerator == 0 else 0
       return numerator / denominator
-    
     
     def cosine_similarity2(a, b):
       numerator = 0
@@ -274,7 +248,6 @@ class Audedup:
       if denominator == 0:
         return 1 if numerator == 0 else 0
       return numerator / denominator
-    
     
     def DTW(a, b, w=0):
       if w == 0:
@@ -296,10 +269,8 @@ class Audedup:
           if i > 0 and j > 0: ds.append(dtw[i-1][j-1])
           
           dtw[i][j] = d + min(ds)
-          
-      #~ return (dtw[a.shape[0] - 1][b.shape[0] - 1], dtw)
+      
       return dtw[a.shape[0] - 1][b.shape[0] - 1]
-    
     
     def supposedly_are_same(f1, f2):
       tempo_dist = 0
@@ -317,21 +288,16 @@ class Audedup:
         return False
       
       dtw_dist = DTW(f1['chroma'], f2['chroma']) / (f1['track_length'] + f2['track_length'])
-      # TODO: perhaps interpolate results for (-t 10, 20, 30, ...) into a function?
-      #~ print(dtw_dist, f1['filename'][-10:], f2['filename'][-10:])
       
       # skip if DTW distance too large
-      if dtw_dist > 0.29: return False
-      # else mark as same
-      return True
-    
+      return True if dtw_dist <= 0.29 else False
     
     def mark_as_same(f1, f2):
       if 'cluster' in f1:
         if 'cluster' in f2:
           # if f1 and f2 have assigned clusters that aren't the same
           if f1['cluster'] != f2['cluster']:
-            # mark them as same
+            # mark the clusters as same
             mark_as_same.same_clusters[tuple(sorted([f1['cluster'], f2['cluster']]))] = True
         else: # if no cluster in f2
           # assign f2's cluster to be the same as f1's
@@ -342,14 +308,10 @@ class Audedup:
         else: # if neither has assigned cluster
           f1['cluster'] = f2['cluster'] = mark_as_same.cluster_count
           mark_as_same.cluster_count += 1
-    
-    
-    #~ 
-    #~ ca, call = 0, 0
-    #~ ddtwy, ddtwn = [], []
-    #~ 
+
     mark_as_same.same_clusters = {}
     mark_as_same.cluster_count = 0
+    
     
     for i,f1 in enumerate(self.features):
       
@@ -367,25 +329,7 @@ class Audedup:
         
         # else mark f1 and f2 as same
         mark_as_same(f1, f2)
-        
-        
-        #~ real_class = (f1['filename'][:-5] == f2['filename'][:-5])
-        #~ if real_class:
-          #~ ddtwy.append(dtw_dist)
-          #~ print(f1['filename'][:-5], f1['tempo'], f2['tempo'], dtw_dist)
-        #~ else:
-          #~ ddtwn.append(dtw_dist)
-          #~ print(dtw_dist, f1['filename'][:-5], f1['tempo'], f2['tempo'])
-        #~ 
-        #~ det_class = False
-        #~ if dtw_dist < 0.29:
-          #~ det_class = True
-        #~ 
-        #~ call += 1
-        #~ ca += 1 if real_class == det_class else 0
-        
-        #~ if f1 != f2:
-          #~ print('{0}\t{1}\t{2}\t{3}\t{4}\t{5}'.format(f1, f2, dists, dist_chroma, real_class, det_class))
+    
     
     if mark_as_same.cluster_count > 0:
       print('\r{0:30}\r'.format(''), end='', file=sys.stderr)
@@ -416,19 +360,8 @@ class Audedup:
             round(f['relative_magnitude'], 3), 
             round(f['track_length'], 1)))
       print('')
-      
-      
-    #~ 
-    #~ ddtwy = np.array(ddtwy)
-    #~ ddtwn = np.array(ddtwn)
-    #~ if ddtwy.size > 0:
-      #~ print('\n\nAvg Similar: {0}∓{1} ({2} to {3})'.format(ddtwy.mean(), ddtwy.std(), ddtwy.min(), ddtwy.max()), file=sys.stderr)
-    #~ if ddtwn.size > 0:
-      #~ print('Avg Not-similar: {0}∓{1} ({2} to {3})'.format(ddtwn.mean(), ddtwn.std(), ddtwn.min(), ddtwn.max()), file=sys.stderr)
-    #~ print('Classification accuracy: {0}/{1}'.format(ca, call), file=sys.stderr)
 
-  
-  
+
   
   def main(self):
     try:
@@ -436,43 +369,37 @@ class Audedup:
     except ImportError:
       exit('audedup: error: Python2.7+ required.')
       
-    parser = argparse.ArgumentParser(description='audedup {0} - audio deduplication'.format(__version__),
-                                    epilog=
-      'Program outputs (to stdout) clusters (separated by a blank line) of \
-      similar files (separated by a single "\\n"). \
-      See website for more info: http://code.google.com/p/audedup/', 
-                                    prog='audedup',
-                                    usage='%(prog)s [OPTIONS] DIR [DIR ...]')
+    parser = argparse.ArgumentParser(
+      description='audedup {0} - audio deduplication'.format(__version__),
+      epilog='Program outputs (to stdout) clusters (separated by a blank line)\
+              of similar files (separated by a single "\\n"). See website for \
+              more info: http://code.google.com/p/audedup/', 
+      prog='audedup',
+      usage='%(prog)s [OPTIONS] DIR [DIR ...]')
     parser.add_argument('directories', metavar='DIR', type=str, nargs='+',
-                        help='directory with audio files')
+      help='directory with audio files')
     parser.add_argument('-f', '--fast', metavar='N', type=int, default=False,
-                        help=
-      'use only first N seconds of each track (faster but considerably \
-      less accurate -- use values above 120)')
-    #parser.add_argument('-k', '--similarity', default=0.9, type=float,
-                        #help='similarity coefficient [0.0 to 1.0] (default: 0.9)')
+      help='use only first N seconds of each track (faster but considerably \
+            less accurate -- use values above 120)')
     parser.add_argument('-r', '--recursive', action='store_true', default=False,
-                        help='recurse in sub-directories')
+      help='recurse in sub-directories')
     parser.add_argument('-t', '--filetypes', metavar='LIST', default='mp3,ogg,flac,wma,mp4',
-                        help='filetypes to consider (default: mp3,ogg,flac,wma,mp4)')
+      help='filetypes to consider (default: mp3,ogg,flac,wma,mp4)')
     parser.add_argument('--output', metavar='FORMAT', default='{0}',
-                        help=
-      'a string representing output format of each cluster; you can use: \
-      {0}=filename, {1}=relative loudness, {2}=track length in seconds; \
-      example: "{0}\\t{2}"; (default: "{0}")')
+      help='a string representing output format of each cluster; you can use: \
+            {0}=filename, {1}=relative loudness, {2}=track length in seconds; \
+            example: "{0}\\t{2}"; (default: "{0}")')
     parser.add_argument('--save', metavar='FILE', default=False,
-                        help='save preprocessed and analysed audio features')
+      help='save preprocessed and analysed audio features')
     parser.add_argument('--load', metavar='FILE', default=False,
-                        help=
-      'load saved audio features -- note, main processing still takes place \
-      for any DIR arguments, so if you don\'t want those, set DIR to one that \
-      contains no audio files, or set --filetypes to some "random"')
+      help='load saved audio features -- note, main processing still takes \
+      place for any DIR arguments, so if you don\'t want those, set DIR to one\
+      that contains no audio files, or set --filetypes to some "random"')
     parser.add_argument('-v', '--verbose', action='store_true', default=False,
-                        help='verbose intermediate output instead of just the result')
+      help='verbose intermediate output instead of just the result')
                        
     self.args = parser.parse_args()
     self.args.filetypes = tuple(('.' + self.args.filetypes).replace(',', ',.').split(','))
-    #self.args.similarity = min(max(self.args.similarity, 0.0), 1.0)   # clip to [0.0 1.0]
     
     if not self.args.fast:
       self.ffmpeg_timearg = ''
@@ -480,6 +407,7 @@ class Audedup:
     else:
       self.mplayer_timearg = self.mplayer_timearg.format(self.args.fast)
       self.ffmpeg_timearg = self.ffmpeg_timearg.format(self.args.fast)
+    
     self.mplayer_command = self.mplayer_command.format(self.mplayer_timearg)
     self.ffmpeg_command = self.ffmpeg_command.format(self.ffmpeg_timearg)
     
@@ -491,7 +419,6 @@ class Audedup:
     
     for dirname in self.args.directories:
       self.walk_directory(dirname)
-    #~ self.files = self.files.keys()
     
     if self.args.verbose:
       print('\nWill analyze', len(self.files), 'files:', file=sys.stderr)
@@ -505,27 +432,13 @@ class Audedup:
     if self.args.save:
       pickle.dump(self.features, open(self.args.save, 'w'), protocol=2)
     
-    
-    self.build_similar_clusters()
+    self.print_similar_clusters()
     
     #~ plt.show()
 
 
 
+
 if __name__ == '__main__':
   Audedup().main()
-  #~ 
-  #~ import matplotlib.pyplot as plt
-  #~ import matplotlib.cm as cm
-  #~ x = np.array([0,0,0,0,1,1,2,2,3,2,1,1,0,0,0,0])
-  #~ y = np.array([0,0,1,1,2,2,3,3,3,3,2,2,1,1,0,0])
-  #~ dist, cost = DTW_dist(x, y)
-  #~ print(dist)
-  #~ print(cost)
-  #~ fig = plt.figure(1)
-  #~ ax = fig.add_subplot(111)
-  #~ plot1 = plt.imshow(cost.T, origin='lower', cmap=cm.gray, interpolation='nearest')
-  #~ xlim = ax.set_xlim((-0.5, cost.shape[0]-0.5))
-  #~ ylim = ax.set_ylim((-0.5, cost.shape[1]-0.5))
-  #~ plt.show()
-  
+
