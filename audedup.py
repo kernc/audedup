@@ -226,7 +226,7 @@ class Audedup:
   
   
   def print_similar_clusters(self):
-    
+    def dist_to_closest(a, vec): return abs(vec - a).min()
     def idx_of_closest(a, vec): return abs(vec - a).argmin()
     def euclid_dist(a, b): return sqrt(((a-b) ** 2).sum())
     
@@ -372,8 +372,8 @@ class Audedup:
     parser = argparse.ArgumentParser(
       description='audedup {0} - audio deduplication'.format(__version__),
       epilog='Program outputs (to stdout) clusters (separated by a blank line)\
-              of similar files (separated by a single "\\n"). See website for \
-              more info: http://code.google.com/p/audedup/', 
+              of similar audio files (separated by a single "\\n"). See \
+              website for more info: http://code.google.com/p/audedup/', 
       prog='audedup',
       usage='%(prog)s [OPTIONS] DIR [DIR ...]')
     parser.add_argument('directories', metavar='DIR', type=str, nargs='+',
@@ -390,7 +390,7 @@ class Audedup:
             {0}=filename, {1}=relative loudness, {2}=track length in seconds; \
             example: "{0}\\t{2}"; (default: "{0}")')
     parser.add_argument('--save', metavar='FILE', default=False,
-      help='save preprocessed and analysed audio features')
+      help='save preprocessed and analyzed audio features')
     parser.add_argument('--load', metavar='FILE', default=False,
       help='load saved audio features -- note, main processing still takes \
       place for any DIR arguments, so if you don\'t want those, set DIR to one\
