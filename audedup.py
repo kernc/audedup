@@ -38,9 +38,9 @@ class Audedup:
   
   # perhaps replace with audiolab in the future?
   ffmpeg_command = (
-    "ffmpeg -loglevel quiet -i \"{{1}}\" -ac 1 -ar {{0}} -f s8 {0} \"{{2}}\"   >/dev/null 2>&1" )  # timearg; SRATE, src, dst
+    "ffmpeg -loglevel quiet -i \"{{1}}\" -ac 1 -ar {{0}} -f s8 {0} \"{{2}}\"" )  # timearg; SRATE, src, dst
   mplayer_command = (
-    "mplayer -really-quiet -vc null -vo null -SRATE {{0}} -af resample={{0}}:0:0,pan=1:0.5:0.5,channels=1,format=s8 -ao pcm:fast:nowaveheader:file=\"{{2}}\" {0} \"{{1}}\"    >/dev/null 2>&1" )  # timearg; SRATE, dst, src
+    "mplayer -really-quiet -vc null -vo null -SRATE {{0}} -af resample={{0}}:0:0,pan=1:0.5:0.5,channels=1,format=s8 -ao pcm:fast:nowaveheader:file=\"{{2}}\" {0} \"{{1}}\"" )  # timearg; SRATE, dst, src
   
   ffmpeg_timearg = '-t {0}'         # only use first {0} seconds
   mplayer_timearg = '-endpos {0}'   # if so specified
@@ -139,7 +139,11 @@ class Audedup:
         if not os.path.exists(rawfilename):
           break
       
-      if 0 != subprocess.call(command.format(self.SRATE, filename, rawfilename), shell=True):
+      if 0 != subprocess.call(
+          command.format(self.SRATE, filename, rawfilename), 
+          stdout=open(os.devnull, 'w'),
+          stderr=subprocess.STDOUT,
+          shell=True):
         os.remove(rawfilename)
         rawfilename = None
         continue
@@ -185,6 +189,9 @@ class Audedup:
     rel_mag = pcm[pcm > 0].sum() + abs(pcm[pcm < 0]).sum()
     rel_mag /= 2 * pcm.size * abs(pcm).max()
     feature['relative_magnitude'] = rel_mag
+    
+    # TODO: make features representable and hashable so that similar files 
+    # can be retrieved by a perceptual or range hash or tree or whatever
     
     n_windows = pcm.size // self.WINLEN
     chroma_time = np.zeros((n_windows, 12))
