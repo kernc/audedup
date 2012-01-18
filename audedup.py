@@ -211,13 +211,13 @@ class Audedup:
     
     feature['chroma'] = chroma_time
     
-    
     w = np.blackman(9)
     #~ w = np.hamming(14)
     #~ w = np.hamming(3)
     acorr = self.autocorr(chroma_amps)
     acorr = np.convolve(w/w.sum(), acorr, mode='valid')
     
+    #~ plt.figure().add_subplot(111).imshow(chroma_time)
     #~ plt.plot(acorr)
     #~ plt.show()
     #~ exit(1)
@@ -233,6 +233,9 @@ class Audedup:
   
   
   def print_similar_clusters(self):
+    
+    #~ plt.show()
+    
     def dist_to_closest(a, vec): return abs(vec - a).min()
     def idx_of_closest(a, vec): return abs(vec - a).argmin()
     def euclid_dist(a, b): return sqrt(((a-b) ** 2).sum())
@@ -339,7 +342,9 @@ class Audedup:
     
     
     if mark_as_same.cluster_count > 0:
-      print('\r{0:30}\r'.format(''), end='', file=sys.stderr)
+      print('\r{0:<30}\r'.format(''), end='', file=sys.stderr)
+      if self.args.verbose:
+        print('HERE ARE THE RESULTS:\n', file=sys.stderr)
     
     same_clusters = mark_as_same.same_clusters.keys()
     already_printed = set()
@@ -419,7 +424,7 @@ class Audedup:
     self.ffmpeg_command = self.ffmpeg_command.format(self.ffmpeg_timearg)
     
     if self.args.verbose:
-      print('audedup {0} running (http://code.google.com/p/audedup/) ...'.format(__version__), file=sys.stderr)
+      print('audedup {0} (http://code.google.com/p/audedup/) ...'.format(__version__), file=sys.stderr)
       print('Runtime arguments:', file=sys.stderr)
       for (arg,val) in vars(self.args).items():
         print('  {0}: {1}'.format(arg, val), file=sys.stderr)
@@ -434,7 +439,7 @@ class Audedup:
       self.features = pickle.load(open(self.args.load))
       
       if self.args.verbose:
-        print('Loaded {0} feature desriptors from file \'{1}\''.format(
+        print('\rLoaded {0} feature desriptors from file \'{1}\''.format(
           len(self.features), self.args.load), file=sys.stderr)
       
     
@@ -445,8 +450,8 @@ class Audedup:
       pickle.dump(self.features, open(self.args.save, 'w'), protocol=2)
       
       if self.args.verbose:
-        print('Saved {0} feature desriptors to file \'{1}\''.format(
-          len(self.features), self.args.load), file=sys.stderr)
+        print('\rSaved {0} feature desriptors to file \'{1}\'\n'.format(
+          len(self.features), self.args.save), file=sys.stderr)
     
     self.print_similar_clusters()
     
