@@ -432,12 +432,21 @@ class Audedup:
     
     if self.args.load:
       self.features = pickle.load(open(self.args.load))
+      
+      if self.args.verbose:
+        print('Loaded {0} feature desriptors from file \'{1}\''.format(
+          len(self.features), self.args.load), file=sys.stderr)
+      
     
     for i,f in enumerate(self.files):
       self.extract_features(f, i + 1)
     
     if self.args.save:
       pickle.dump(self.features, open(self.args.save, 'w'), protocol=2)
+      
+      if self.args.verbose:
+        print('Saved {0} feature desriptors to file \'{1}\''.format(
+          len(self.features), self.args.load), file=sys.stderr)
     
     self.print_similar_clusters()
     
